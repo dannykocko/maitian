@@ -4,6 +4,7 @@ import fs from 'node:fs'; import path from 'node:path'; import os from 'node:os'
 import { execFileSync, spawnSync } from 'node:child_process';
 import readline from 'node:readline/promises';
 import { fileURLToPath } from 'node:url';
+import { isMac, isLinux, findChrome, thumbTool } from './platform.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const CFG = path.join(ROOT, 'config.json');
@@ -24,10 +25,13 @@ console.log('\n麦田 · 安装向导\n');
 console.log('一、检查环境');
 const [maj, min] = process.versions.node.split('.').map(Number);
 if (maj > 22 || (maj === 22 && min >= 5)) ok(`Node.js ${process.versions.node}`); else { bad(`Node.js ${process.versions.node}，需要 22.5 以上（用到内置 node:sqlite）`); process.exit(1); }
-if (process.platform !== 'darwin') tip('目前只在 macOS 上实测过；其他系统需要自己改开机自启和 NAS 挂载部分');
-const chrome = ['/Applications/Google Chrome.app', path.join(os.homedir(), 'Applications/Google Chrome.app')].find(fs.existsSync);
-chrome ? ok('Google Chrome') : bad('没找到 Google Chrome，请先安装');
-let cf = false; try { execFileSync('which', ['cloudflared'], { stdio: 'pipe' }); cf = true; ok('cloudflared（可选，远程访问用）'); } catch { tip('没装 cloudflared：想在手机上远程看麦田，之后 brew install cloudflared'); }
+if (isMac) ok('macOS');
+else if (isLinux) ok('Linux（开机自启走 systemd、缩略图走 ffmpeg、防休眠走 systemd-inhibit）');
+else tip('目前只在 macOS 和 Linux 上支持；其他系统需要自己改开机自启部分');
+const chrome = findChrome();
+chrome ? ok(`Chrome/Chromium：${chrome}`) : bad('没找到 Chrome/Chromium：装好 Google Chrome 或 Chromium，或用 CHROME_BIN 环境变量指定路径');
+if (isLinux) thumbTool() === 'ffmpeg' ? ok('ffmpeg（网页缩略图用）') : tip('没装 ffmpeg：网页缩略图会直接用原图；想开缩略图 sudo apt install ffmpeg');
+let cf = false; try { execFileSync('which', ['cloudflared'], { stdio: 'pipe' }); cf = true; ok('cloudflared（可选，远程访问用）'); } catch { tip(isLinux ? '没装 cloudflared：想在手机上远程看麦田，之后从 github.com/cloudflare/cloudflared/releases 下 .deb 安装' : '没装 cloudflared：想在手机上远程看麦田，之后 brew install cloudflared'); }
 
 if (fs.existsSync(CFG) && !(await yes('\n已经有 config.json，要重新生成吗？（旧的会备份成 config.json.bak）', false))) {
   console.log('\n保留现有配置。'); rl.close(); process.exit(0);
@@ -44,6 +48,7 @@ cfg.rootPath = home(await ask('2. 发布工程放在哪个文件夹？（每期�
 fs.mkdirSync(cfg.rootPath, { recursive: true });
 const nas = await ask('3. 如果发布工程在 NAS 上，填 SMB 地址，掉线时自动重挂（比如 smb://用户名@192.168.1.10/共享名；不用就回车）');
 if (nas) cfg.nasUrl = nas; else delete cfg.nasUrl;
+if (nas && isLinux) tip('Linux 上不会自动挂 NAS：请先用 /etc/fstab 或 mount.cifs 把它挂到发布工程目录');
 const hook = await ask('4. 飞书群机器人的 Webhook 地址（通知卡片发到这里；不用就回车）');
 if (hook) cfg.feishuWebhook = hook; else delete cfg.feishuWebhook;
 const xh = await ask('5. 你的 X 用户名（不带 @，用来采粉丝；不用就回车）');
@@ -62,8 +67,9 @@ fs.writeFileSync(CFG, JSON.stringify(cfg, null, 2) + '\n');
 ok(`已写入 config.json（网页口令：${cfg.web.key}）`);
 
 console.log('\n三、收尾');
-if (process.platform === 'darwin' && await yes('装成开机自启的守护进程？（推荐，之后自动采数据、发通知）')) {
-  spawnSync(path.join(ROOT, 'scripts/install-launchd.sh'), cf && await yes('顺带装远程访问隧道（cloudflared）？', false) ? ['--tunnel'] : [], { stdio: 'inherit' });
+const installer = isMac ? 'scripts/install-launchd.sh' : isLinux ? 'scripts/install-systemd.sh' : null;
+if (installer && await yes('装成开机自启的守护进程？（推荐，之后自动采数据、发通知）')) {
+  spawnSync(path.join(ROOT, installer), cf && await yes('顺带装远程访问隧道（cloudflared）？', false) ? ['--tunnel'] : [], { stdio: 'inherit' });
 }
 if (chrome && await yes('现在打开专用 Chrome 和各平台页面去登录？（每个平台扫码或登录一次）')) {
   spawnSync(process.execPath, [path.join(ROOT, 'src/hub.mjs'), 'login'], { stdio: 'inherit' });

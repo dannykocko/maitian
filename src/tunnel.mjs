@@ -10,7 +10,7 @@ const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..')
 const OUT = path.join(ROOT, 'data', 'tunnel.json');
 const port = config.web?.port || 8787, key = config.web?.key;
 const named = config.tunnel?.name && config.tunnel?.hostname;
-const CF = config.tunnel?.bin || '/opt/homebrew/bin/cloudflared';
+const CF = config.tunnel?.bin || (fs.existsSync('/opt/homebrew/bin/cloudflared') ? '/opt/homebrew/bin/cloudflared' : 'cloudflared');
 // QUIC 在不少网络下被拦，统一走 http2
 const args = named
   ? ['tunnel', '--no-autoupdate', '--protocol', 'http2', 'run', '--url', `http://127.0.0.1:${port}`, config.tunnel.name]

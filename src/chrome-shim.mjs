@@ -3,10 +3,14 @@
 import { spawn, execFileSync } from 'node:child_process';
 import os from 'node:os'; import path from 'node:path'; import fs from 'node:fs';
 import { config } from './feishu.mjs';
+import { isMac, findChrome } from './platform.mjs';
 
 const PORT = config.chromePort || 9333;
 const PROFILE = (config.chromeProfile || '~/publish-hub/chrome-profile').replace(/^~/, os.homedir());
-const BIN = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
+// 优先级：config.chromeBin > CHROME_BIN 环境变量 > 各系统常见位置（见 src/platform.mjs）
+const BIN = config.chromeBin || findChrome();
+// 无头服务器：CHROME_HEADLESS=1 或 config.chromeHeadless=true 时用 --headless=new 跑 Chrome
+const HEADLESS = process.env.CHROME_HEADLESS === '1' || config.chromeHeadless === true;
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
 let ws = null, seq = 0;
@@ -17,16 +21,18 @@ let nextTab = 1000;
 
 const version = () => fetch(`http://127.0.0.1:${PORT}/json/version`, { signal: AbortSignal.timeout(2000) }).then(r => r.json());
 
-// 启动专用 Chrome（已经在跑就直接用）。foreground=true 时把窗口带到前台（登录用）
+// 启动专用 Chrome（已经在跑就直接用）。foreground=true 时把窗口带到前台（登录用，仅 macOS）
 export async function launchChrome({ foreground = false } = {}) {
   try { await version(); } catch {
+    if (!BIN) throw new Error('没找到 Chrome/Chromium：装好 Google Chrome 或 Chromium，或用 CHROME_BIN 环境变量 / config.chromeBin 指定路径');
     fs.mkdirSync(PROFILE, { recursive: true });
     const args = [`--user-data-dir=${PROFILE}`, `--remote-debugging-port=${PORT}`, '--no-first-run', '--no-default-browser-check',
       '--disable-backgrounding-occluded-windows', '--disable-renderer-backgrounding', '--disable-background-timer-throttling', '--window-size=1500,1000'];
+    if (HEADLESS) args.push('--headless=new', '--no-sandbox', '--disable-gpu', '--disable-dev-shm-usage');
     spawn(BIN, args, { detached: true, stdio: 'ignore' }).unref();
     for (let i = 0; i < 30; i++) { await sleep(500); try { await version(); break; } catch { if (i === 29) throw new Error('专用 Chrome 没启动起来'); } }
   }
-  if (foreground) { try { execFileSync('osascript', ['-e', `tell application "System Events" to set frontmost of (first process whose unix id is ${await pid()}) to true`]); } catch { /* 不影响 */ } }
+  if (foreground && isMac) { try { execFileSync('osascript', ['-e', `tell application "System Events" to set frontmost of (first process whose unix id is ${await pid()}) to true`]); } catch { /* 不影响 */ } }
 }
 async function pid() { return execFileSync('lsof', ['-ti', `tcp:${PORT}`, '-sTCP:LISTEN']).toString().trim().split('\n')[0]; }
 

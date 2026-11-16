@@ -17,6 +17,7 @@ import { boardSync } from './board.mjs';
 const board = (o) => boardSync(o).then((r) => { if (r) console.log('看板已同步：' + JSON.stringify(r)); return r; }).catch((e) => { console.error('看板同步出错：' + e.message); });
 import { config, notify } from './feishu.mjs';
 import { collectFollowers } from './followers.mjs';
+import { isMac, spawnAwake, portListening } from './platform.mjs';
 import * as drv from './driver.mjs';
 import { SITE } from './site.mjs';
 import { xExisting, xSubmit, ytRows, ytSubmit, zszCourses, douyinTopics, igExisting, igSubmit } from './checks.mjs';
@@ -270,10 +271,12 @@ async function doctor() {
   return bad;
 }
 
-// NAS 没挂上就试着挂一次（用钥匙串里存的密码），返回是否可读
+// NAS 没挂上就试着挂一次（macOS：用钥匙串里存的密码；Linux：不会自动挂，
+// 请先用 /etc/fstab 或 mount.cifs 把 NAS 挂到发布工程目录），返回是否可读
 async function ensureNas() {
   const ok = () => { try { fs.accessSync(config.rootPath); return true; } catch { return false; } };
   if (ok()) return true;
+  if (!isMac) { console.log('发布工程目录不可读：Linux 上请先把 NAS 挂好（/etc/fstab 或 mount.cifs）再跑'); return false; }
   // 2026-11-14：NAS 掉线重连后，macOS 有时把它挂到「…-1」，原路径就读不到了（封面全挂、NAS 灯变红）。
   // 发现同一个共享挂在带后缀的路径上，先卸掉再按原路径挂回来
   try {
@@ -288,14 +291,13 @@ async function ensureNas() {
 
 // X 长文模式：到点前启动插件仓库里的 tools/x-article-quote.mjs（走日常 Chrome 里插件的开发桥）
 const extId = () => config.extensionId || [...crypto.createHash('sha256').update(path.resolve(config.pluginDir)).digest('hex').slice(0, 32)].map(c => String.fromCharCode(97 + parseInt(c, 16))).join('');
-function startArticleJob(ep, pj) {
+async function startArticleJob(ep, pj) {
   const x = pj.platforms.x, dir = ep.dir, logf = path.join(path.dirname(new URL(import.meta.url).pathname), '..', 'data', `x-article-${ep.id}.log`);
   const textf = path.join(path.dirname(logf), `x-article-${ep.id}.txt`); fs.writeFileSync(textf, x.text || '');
-  try { execFileSync('lsof', ['-iTCP:8765', '-sTCP:LISTEN'], { stdio: 'pipe' }); }
-  catch { spawn(process.execPath, ['tools/bridge-server.mjs'], { cwd: config.pluginDir, detached: true, stdio: 'ignore' }).unref(); }
-  try { execFileSync('open', ['-g', '-a', 'Google Chrome', `chrome-extension://${extId()}/sidepanel.html`], { stdio: 'pipe' }); } catch {}
+  if (!(await portListening(8765))) spawn(process.execPath, ['tools/bridge-server.mjs'], { cwd: config.pluginDir, detached: true, stdio: 'ignore' }).unref();
+  if (isMac) { try { execFileSync('open', ['-g', '-a', 'Google Chrome', `chrome-extension://${extId()}/sidepanel.html`], { stdio: 'pipe' }); } catch {} }
   const out = fs.openSync(logf, 'a');
-  spawn('caffeinate', ['-dims', process.execPath, path.join(config.pluginDir, 'tools/x-article-quote.mjs'), '--draft', x.article, '--video', path.join(dir, pj.video || '成片.mp4'),
+  spawnAwake([process.execPath, path.join(config.pluginDir, 'tools/x-article-quote.mjs'), '--draft', x.article, '--video', path.join(dir, pj.video || '成片.mp4'),
     '--text', textf, '--at', pj.schedule, '--prep', '20', '--hub-id', ep.id], { cwd: config.pluginDir, detached: true, stdio: ['ignore', out, out], env: { ...process.env, PUBLISH_HUB: path.resolve(path.dirname(logf), '..') } }).unref();
   log(ep.id, 'x', 'article-job', `启动长文脚本，日志 ${logf}`);
 }

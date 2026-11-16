@@ -6,6 +6,7 @@ import { SITE } from './site.mjs';
 import { review } from './review.mjs';
 import { accessEmail } from './access.mjs';
 import { initLogin, sessionOk, handleLogin } from './login.mjs';
+import { thumbTool } from './platform.mjs';
 
 const DIR = path.dirname(fileURLToPath(import.meta.url)), ROOT = path.resolve(DIR, '..');
 const W = config.web || { port: 8787, key: '' };
@@ -90,14 +91,18 @@ button{width:100%;height:50px;border:0;border-radius:14px;background:#1c1a16;col
 <pre id="c"></pre><script>const code=${JSON.stringify(code).replace(/</g, '\\u003c')};document.getElementById('c').textContent=code;
 document.getElementById('b').onclick=async()=>{try{await navigator.clipboard.writeText(code);b.textContent='已复制 ✓';}catch{const r=document.createRange();r.selectNodeContents(c);getSelection().removeAllRanges();getSelection().addRange(r);b.textContent='长按选中的文字复制';}};</script></body></html>`;
 
-// 缩略图：macOS 自带 sips 缩放转 JPEG，按 原文件路径+修改时间+尺寸 缓存；失败返回 null（退回原图）
+// 缩略图：sips（macOS 自带）或 ffmpeg（Linux）缩放转 JPEG，按 原文件路径+修改时间+尺寸 缓存；
+// 两个工具都没有就返回 null（调用方退回原图，不崩）
 function thumb(f, w) {
   try {
     const st = fs.statSync(f), dir = path.join(ROOT, 'data', 'thumbs');
     const out = path.join(dir, crypto.createHash('sha1').update(`${f}|${st.mtimeMs}|${w}`).digest('hex') + '.jpg');
     if (fs.existsSync(out)) return out;
     fs.mkdirSync(dir, { recursive: true });
-    execFileSync('/usr/bin/sips', ['-Z', String(w), '-s', 'format', 'jpeg', '-s', 'formatOptions', '78', f, '--out', out], { stdio: 'ignore', timeout: 20000 });
+    const tool = thumbTool();
+    if (tool === 'sips') execFileSync('/usr/bin/sips', ['-Z', String(w), '-s', 'format', 'jpeg', '-s', 'formatOptions', '78', f, '--out', out], { stdio: 'ignore', timeout: 20000 });
+    else if (tool === 'ffmpeg') execFileSync('ffmpeg', ['-y', '-i', f, '-vf', `scale=${w}:${w}:force_original_aspect_ratio=decrease`, '-q:v', '5', out], { stdio: 'ignore', timeout: 20000 });
+    else return null;
     return fs.existsSync(out) ? out : null;
   } catch { return null; }
 }

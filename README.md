@@ -2,7 +2,7 @@
 
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-2ea44f" alt="MIT" /></a>
-  <img src="https://img.shields.io/badge/macOS-only-1c1a16?logo=apple" alt="macOS" />
+  <img src="https://img.shields.io/badge/macOS_Linux-1c1a16?logo=linux" alt="macOS 和 Linux" />
   <img src="https://img.shields.io/badge/Node.js-%E2%89%A5%2022.5-5FA04E?logo=nodedotjs&logoColor=white" alt="Node 22.5+" />
   <a href="https://github.com/CzzzzzzJ/mdldm-maitian-publisher"><img src="https://img.shields.io/badge/Chrome-麦田发布助手-F2B21B?logo=googlechrome&logoColor=white" alt="麦田发布助手" /></a>
   <a href="https://github.com/CzzzzzzJ/mdldm-maitian/stargazers"><img src="https://img.shields.io/github/stars/CzzzzzzJ/mdldm-maitian?style=social" alt="Stars" /></a>
@@ -22,7 +22,9 @@
 2. **看得清楚**：每期在每个平台的播放、互动，各平台粉丝，每天自动采、长期留存；手机上看大屏，飞书群推卡片。
 3. **算得出钱**：接上你自己的站点，看哪一期、哪个平台带来了注册和收入。
 
-> 跑在一台常开的 Mac 上，用你自己登录好的浏览器操作各平台，**不存任何平台密码**。国内四家只填写不发布，最后一下由你自己点。
+> 跑在一台常开的 Mac 或 Linux 服务器上，用你自己登录好的浏览器操作各平台，**不存任何平台密码**。国内四家只填写不发布，最后一下由你自己点。
+
+> **跨平台 fork 说明**：本仓库是上游 [CzzzzzzJ/mdldm-maitian](https://github.com/CzzzzzzJ/mdldm-maitian)（作者：麦当 mdldm）的跨平台 fork，MIT 协议，LICENSE 保留上游原文。上游只支持 macOS；本 fork 在不改核心流程的前提下加了 Linux 支持：systemd 开机自启、ffmpeg 缩略图、systemd-inhibit 防休眠、Chrome/Chromium 自动发现（支持 `CHROME_BIN` 环境变量）。macOS 下的行为和上游一致；平台适配器、网页大屏、飞书登录、隧道逻辑都没动。
 
 ## 看它跑一遍
 
@@ -53,10 +55,10 @@
 ## 一行装好
 
 ```bash
-bash -c "$(curl -fsSL https://raw.githubusercontent.com/CzzzzzzJ/mdldm-maitian/main/scripts/install.sh)"
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/dannykocko/maitian/main/scripts/install.sh)"
 ```
 
-下载麦田和发布助手到 `~/maitian/`、接上发布 skill、打开安装向导；向导问完几个问题，生成配置、装好开机自启、打开各平台登录页。需要 macOS、Node.js ≥ 22.5、Google Chrome。
+下载麦田和发布助手到 `~/maitian/`、接上发布 skill、打开安装向导；向导问完几个问题，生成配置、装好开机自启、打开各平台登录页。需要 macOS 或 Linux、Node.js ≥ 22.5、Google Chrome（或 Chromium）。Linux 安装细节见下文「Linux 安装」一节。
 
 <p align="center"><img src="https://github.com/CzzzzzzJ/mdldm-maitian/releases/download/media/maitian-install.gif" width="720" alt="一行安装演示" /></p>
 
@@ -65,19 +67,39 @@ bash -c "$(curl -fsSL https://raw.githubusercontent.com/CzzzzzzJ/mdldm-maitian/m
 
 或者手动：
 
-需要：macOS、Node.js ≥ 22.5（用到内置 `node:sqlite`）、Google Chrome；可选 NAS（放成片）、飞书群机器人、cloudflared。
+需要：macOS 或 Linux、Node.js ≥ 22.5（用到内置 `node:sqlite`）、Google Chrome（或 Chromium）；可选 NAS（放成片）、飞书群机器人、cloudflared；Linux 上网页缩略图需要 ffmpeg（不装也能跑，只是缩略图退回原图）。
 
 ```bash
 git clone https://github.com/CzzzzzzJ/mdldm-maitian-publisher.git
-git clone https://github.com/CzzzzzzJ/mdldm-maitian.git && cd mdldm-maitian
+git clone https://github.com/dannykocko/maitian.git && cd maitian
 node src/demo.mjs                       # 先用假数据看看效果：http://localhost:8788/?key=demo
 node src/init.mjs                       # 安装向导：检查环境、生成 config.json、装开机自启、打开各平台登录页
 node src/hub.mjs doctor                 # 登录完检查各平台登录态和上传页（不上传、不填写）
 ```
 
-打开向导最后给出的地址（`http://localhost:8787/?key=<web.key>`），之后浏览器会记住口令。手动安装也可以：`cp config.example.json config.json` 填好后跑 `scripts/install-launchd.sh`。
+打开向导最后给出的地址（`http://localhost:8787/?key=<web.key>`），之后浏览器会记住口令。手动安装也可以：`cp config.example.json config.json` 填好后跑 `scripts/install-launchd.sh`（macOS）或 `scripts/install-systemd.sh`（Linux）。
 
 </details>
+
+## Linux 安装（本 fork 新增）
+
+一行安装同样适用（脚本会自己判断系统）。也可以手动装：
+
+```bash
+# Node.js 22.5+（Ubuntu 24.04 自带的 Node 还是 18，得用 NodeSource 或官网包）
+curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash - && sudo apt install -y nodejs
+sudo apt install -y git ffmpeg            # ffmpeg 给网页缩略图用，不装也能跑，只是缩略图退回原图
+# Chrome：去 google.com/chrome 下 .deb 安装，或 sudo apt install chromium-browser
+git clone https://github.com/dannykocko/maitian.git && cd maitian
+git clone https://github.com/CzzzzzzJ/mdldm-maitian-publisher.git
+node src/demo.mjs                          # 先用假数据看看效果
+node src/init.mjs                          # 安装向导：检查环境、生成 config.json、装 systemd 服务、打开各平台登录页
+```
+
+- **开机自启**：`scripts/install-systemd.sh`（装守护进程）、`--tunnel`（顺带装 cloudflared 隧道）、`--uninstall`（卸载）。状态：`systemctl --user status maitian-daemon`；日志：`journalctl --user -u maitian-daemon -f`。用户级服务默认只在你登录时跑，想注销后也一直跑：`loginctl enable-linger $USER`。
+- **NAS**：Linux 上不会自动挂 NAS，请先用 `/etc/fstab` 或 `mount.cifs` 把它挂到发布工程目录；`config.json` 里的 `nasUrl` 只在 macOS 上会触发自动重挂。
+- **Chrome 发现**：按顺序找 `config.chromeBin` → `CHROME_BIN` 环境变量 → `google-chrome-stable` / `google-chrome` / `chromium` / `chromium-browser` 及常见路径。
+- **无头服务器**：麦田要驱动一个登录好的 Chrome（CDP），首次登录必须用有图形界面的 Chrome。做法：在自己的电脑上跑一次 `hub login` 登好各平台，再把 `chrome-profile/` 目录拷到服务器；或者在服务器上装 Xvfb + VNC，用 `xvfb-run -a node src/hub.mjs login`，通过 VNC 在浏览器里扫码登录。登录态建好后，守护进程可以无头跑：`CHROME_HEADLESS=1 node src/hub.mjs daemon`（或在 `config.json` 里加 `"chromeHeadless": true`）。
 
 ### 三级上手
 
@@ -145,7 +167,7 @@ node src/hub.mjs followers                  # 采粉丝
 node src/hub.mjs review <id> [天数] [--notify]   # 看某期发布 N 天的复盘（守护进程会在第 1/3/7 天自动发）
 node src/hub.mjs weekly [--notify]          # 上周周报（守护进程每周一自动发）
 node src/hub.mjs board                      # 同步到飞书多维表格（可选）
-node src/hub.mjs daemon                     # 常驻（install-launchd.sh 装的就是它）
+node src/hub.mjs daemon                     # 常驻（macOS 上 install-launchd.sh、Linux 上 install-systemd.sh 装的就是它）
 ```
 
 </details>
@@ -189,7 +211,7 @@ node src/hub.mjs daemon                     # 常驻（install-launchd.sh 装的
 <details>
 <summary><b>远程访问（可选）</b></summary>
 
-`scripts/install-launchd.sh --tunnel` 会装一个 cloudflared 隧道，地址推到飞书。
+`scripts/install-launchd.sh --tunnel`（macOS）或 `scripts/install-systemd.sh --tunnel`（Linux）会装一个 cloudflared 隧道，地址推到飞书。
 
 - **固定域名（推荐）**：域名交给 Cloudflare 后，跑 `cloudflared tunnel login`、`cloudflared tunnel create maitian`、`cloudflared tunnel route dns maitian maitian.你的域名`，在 `config.json` 里加 `"tunnel": { "name": "maitian", "hostname": "maitian.你的域名" }`。地址永远不变，建议再在 Cloudflare Zero Trust 里给它加一层邮箱验证码登录（Access → Self-hosted 应用），然后在 `config.json` 的 `web.access` 填团队域名和应用的 AUD Tag：麦田会验证 Access 签发的登录凭证，手机上输邮箱收验证码就能进，不用再带 `?key=`。
 - **飞书验证码登录（推荐，零配置）**：`config.json` 的 `web` 里加 `"login": "feishu"`。远程打开麦田会先到登录页，点「发送验证码」，6 位码推到飞书群，输入后这台设备记住 30 天；验证码 5 分钟有效、只能用一次、错 5 次作废，60 秒内只能发一次。`?key=` 口令仍可用作备用。
@@ -222,7 +244,7 @@ iPhone 桌面 / 锁屏常驻显示全平台粉丝、今日涨粉、最新一期�
 - 🎬 B站 / 小红书 / 抖音 / 视频号：搜「麦当mdldm」
 - ▶️ [YouTube](https://www.youtube.com/channel/UCOz23ZQMefLAgDdnraGV2RQ) · 𝕏 [@czzzzzzJ_](https://x.com/czzzzzzJ_)
 
-觉得有用就点个 ⭐ Star，这是我继续改下去的动力；遇到问题直接提 [Issue](https://github.com/CzzzzzzJ/mdldm-maitian/issues)。
+觉得有用就点个 ⭐ Star，这是我继续改下去的动力；遇到问题直接提 [Issue](https://github.com/dannykocko/maitian/issues)。上游原项目的问题请去 [CzzzzzzJ/mdldm-maitian](https://github.com/CzzzzzzJ/mdldm-maitian/issues) 提。
 
 ## License
 
